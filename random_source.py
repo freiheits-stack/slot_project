@@ -1,5 +1,4 @@
-﻿
-import random
+﻿import random
 
 
 class PseudoRandomSource:
@@ -17,6 +16,7 @@ class QuantumRandomSource:
     def __init__(self, bits):
         self.bits = bits
         self.pos = 0
+        "Start for live game with random pos"
 
     def next_float(self):
         # Slice in 32 bit pieces
@@ -26,6 +26,7 @@ class QuantumRandomSource:
         self.pos += 32
 
         # change to int
+        value = 0
         for index, bit in enumerate(chunk):
             pos_chunk = 31 - index
             if bit == 1:
