@@ -1,4 +1,3 @@
-import serial
 import serial.tools.list_ports
 
 def auto_detect_rng_port():

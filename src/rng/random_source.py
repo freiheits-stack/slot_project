@@ -1,6 +1,5 @@
 ﻿import random
 
-
 class PseudoRandomSource:
     # Baseclass for random source
     def __init__(self, seed = None):
