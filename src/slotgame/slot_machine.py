@@ -1,7 +1,7 @@
 from dataclasses import dataclass
-from typing import List, Optional, Dict
+from typing import List, Optional, Dict, Any, Callable
 
-from config import SlotConfig
+from .config import SlotConfig
 from src.rng.random_source import PseudoRandomSource
 
 
@@ -21,8 +21,8 @@ class AutoPlayResult:
     active_paylines: int
     total_bet: int
 
-    total_base_win: int
-    total_final_win: int
+    total_base_win: float
+    total_final_win: float
 
     rtp_base: float
     rtp_final: float
@@ -36,6 +36,11 @@ class AutoPlayResult:
 
     symbol_hits: Dict[str, int]
     payline_hits: Dict[int, int]
+
+    start_balance: int
+    end_balance: int
+    stop_reason: str
+    max_spins: int
 
 
 class SlotMachine:
@@ -140,20 +145,43 @@ class SlotMachine:
             winning_lines=result.winning_lines,
         )
 
-    def autoplay(self, n_spins: int, bet: Optional[int] = None, active_paylines: Optional[int] = None, gamble_mode: str = "never") -> Dict[str, Any]:
+    def autoplay(
+    self,
+    start_balance: int,
+    max_spins: int,
+    bet: Optional[int] = None,
+    active_paylines: Optional[int] = None,
+    gamble_mode: str = "never",                # "never" | "always"
+    stop_on_bankrupt: bool = True,
+    target_balance: Optional[int] = None,      # z.B. start_balance * 2
+    on_spin: Optional[Callable[[Dict[str, Any]], None]] = None,
+) -> "AutoPlayResult":
 
-        if n_spins <= 0:
-            raise ValueError("n_spins must be > 0")
+        # --- validate inputs ---
+        start_balance = int(start_balance)
+        max_spins = int(max_spins)
+
+        if start_balance < 0:
+            raise ValueError("start_balance must be >= 0")
+        if max_spins <= 0:
+            raise ValueError("max_spins must be > 0")
+        if gamble_mode not in ("never", "always"):
+            raise ValueError("gamble_mode must be 'never' or 'always'")
+        if target_balance is not None and int(target_balance) < 0:
+            raise ValueError("target_balance must be >= 0")
 
         # Use machine defaults unless overridden for this autoplay run
         bet_used = self.bet if bet is None else self._validate_bet(bet)
         paylines_used = self.active_paylines if active_paylines is None else self._validate_active_paylines(active_paylines)
-        
-        if gamble_mode not in ("never", "always"):
-            raise ValueError("gamble_mode must be 'never' or 'always'")
 
-        total_bet = bet_used * paylines_used * n_spins  # bet is per payline
+        cost_per_spin = bet_used * paylines_used  # bet is per payline
 
+        # --- state & counters ---
+        balance = start_balance
+        spins_played = 0
+        stop_reason = "max_spins"
+
+        total_bet = 0
         total_base_win = 0
         total_final_win = 0
 
@@ -164,55 +192,109 @@ class SlotMachine:
         gamble_wins = 0
 
         symbol_hits = {name: 0 for name in self._names}
+        # Only count paylines that can be active (0..paylines_used-1),
+        # but you can keep full length if you prefer.
         payline_hits = {i: 0 for i in range(len(self.config.paylines))}
 
-        for _ in range(n_spins):
-            # spin with explicit settings (so it’s consistent)
+        # --- simulate ---
+        while spins_played < max_spins:
+            # Stop rule: bankrupt (cannot afford next spin)
+            if balance < cost_per_spin:
+                stop_reason = "bankrupt" if stop_on_bankrupt else "insufficient_funds"
+                break
+
+            balance_before = balance
+
+            # Pay the spin cost
+            balance -= cost_per_spin
+            total_bet += cost_per_spin
+
+            # Spin (deterministic settings for this run)
             res = self.spin(bet=bet_used, active_paylines=paylines_used)
 
             total_base_win += res.base_win
             if res.base_win > 0:
                 base_win_spins += 1
 
-            # count symbols for distribution checks
+            # Count symbols for distribution checks
             for r in range(self.config.n_rows):
                 for c in range(self.config.n_cols):
                     symbol_hits[res.grid[r][c]] += 1
 
-            # count hit paylines (indices are relative to the checked subset: 0..paylines_used-1)
+            # Count hit paylines
             for li in res.winning_lines:
                 payline_hits[li] += 1
 
-            # gamble decision AFTER spin
+            # Optional gamble AFTER spin
             if gamble_mode == "always" and res.base_win > 0:
                 gamble_count += 1
                 res = self.gamble(res)
                 if res.gamble_won:
                     gamble_wins += 1
 
+            # Add winnings to balance
+            balance += res.final_win
+            balance_after = balance
+
             total_final_win += res.final_win
             if res.final_win > 0:
                 final_win_spins += 1
 
+            if on_spin is not None:
+                on_spin({
+                    "spin_index": spins_played,          # 0..n-1
+                    "balance_before": balance_before,
+                    "balance_after": balance_after,
+
+                    "payout_base": res.base_win,
+                    "payout_final": res.final_win,
+
+                    "gamble_taken": int(res.gambled),
+                    "gamble_win": res.gamble_won,        # bool | None (Runner macht daraus 0/1/"")
+                })
+
+            spins_played += 1
+
+            # Stop rule: target reached
+            if target_balance is not None and balance >= int(target_balance):
+                stop_reason = "target_reached"
+                break
+
+        # Avoid division by zero (e.g., start_balance=0 and cannot afford even one spin)
+        rtp_base = (total_base_win / total_bet) if total_bet > 0 else 0.0
+        rtp_final = (total_final_win / total_bet) if total_bet > 0 else 0.0
+
+        hit_rate_base = (base_win_spins / spins_played) if spins_played > 0 else 0.0
+        hit_rate_final = (final_win_spins / spins_played) if spins_played > 0 else 0.0
+
+        gamble_win_rate = (gamble_wins / gamble_count) if gamble_count else None
+
         return AutoPlayResult(
-        n_spins=n_spins,
-        bet_per_line=bet_used,
-        active_paylines=paylines_used,
-        total_bet=total_bet,
+            # existing fields you likely already had:
+            n_spins=spins_played,                 # NOTE: now actual spins played, not max_spins
+            bet_per_line=bet_used,
+            active_paylines=paylines_used,
+            total_bet=total_bet,
 
-        total_base_win=total_base_win,
-        total_final_win=total_final_win,
+            total_base_win=total_base_win,
+            total_final_win=total_final_win,
 
-        rtp_base=total_base_win / total_bet,
-        rtp_final=total_final_win / total_bet,
+            rtp_base=rtp_base,
+            rtp_final=rtp_final,
 
-        hit_rate_base=base_win_spins / n_spins,
-        hit_rate_final=final_win_spins / n_spins,
+            hit_rate_base=hit_rate_base,
+            hit_rate_final=hit_rate_final,
 
-        gamble_mode=gamble_mode,
-        gamble_count=gamble_count,
-        gamble_win_rate=(gamble_wins / gamble_count) if gamble_count else None,
+            gamble_mode=gamble_mode,
+            gamble_count=gamble_count,
+            gamble_win_rate=gamble_win_rate,
 
-        symbol_hits=symbol_hits,
-        payline_hits=payline_hits,
-    )
+            symbol_hits=symbol_hits,
+            payline_hits=payline_hits,
+
+            # NEW (add these to AutoPlayResult dataclass if not present):
+            start_balance=start_balance,
+            end_balance=balance,
+            stop_reason=stop_reason,
+            max_spins=max_spins,
+        )
