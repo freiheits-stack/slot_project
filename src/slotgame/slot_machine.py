@@ -56,7 +56,7 @@ class SlotMachine:
             raise ValueError("active_paylines must be 1, 3 or 5")
         return active_paylines
 
-    def __init__(self, config: SlotConfig, modus = None, bet: int = 1, active_paylines: int = 1):
+    def __init__(self, config: SlotConfig, modus = None, bet: int = 1, active_paylines: int = 1, payout_mode: str = "safe"):
         # set attributes
         self.config = config
         self.random_source = modus if modus is not None else PseudoRandomSource()
@@ -78,7 +78,17 @@ class SlotMachine:
         self._cdf = cum                                         # [0.30, 0.55, 0.75, 0.90, 1.00]
 
         self._names = [symbol.name for symbol in self.config.symbols]     # ["A", "B", "C", "D", "E"]
-        self._payout = {symbol.name: int(symbol.payout_multiplier) for symbol in self.config.symbols}  # {"A": 5, "B": 15, "C": 30, "D": 60, "E": 150}
+        safe = {symbol.name: int(symbol.payout_multiplier) for symbol in self.config.symbols}
+
+        if payout_mode == "safe":
+            self._payout = safe                       # {"A": 5, "B": 15, "C": 30, "D": 60, "E": 150}
+        elif payout_mode == "risk":
+            risk = dict(safe)
+            risk["B"] = 7
+            risk["E"] = 275
+            self._payout = risk                       # {"A": 5, "B": 7, "C": 30, "D": 60, "E": 275}
+        else:
+            raise ValueError("payout_mode must be 'safe' or 'risk'")  
 
     def _draw_symbol(self) -> str:
         #Draw one symbol according to configured probabilities using modus.next_float()

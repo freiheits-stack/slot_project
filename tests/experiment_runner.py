@@ -77,7 +77,7 @@ class RunFeatureTracker:
 # --------- CSV helpers ---------
 
 RUNS_FIELDS = [
-    "rng_type", "run_id", "seq_index", "seed", "gamble_mode",
+    "rng_type", "run_id", "seq_index", "seed", "gamble_mode",  "payout_mode",
     "start_balance", "end_balance", "stop_reason", "max_spins", "spins_played",
     "bet_per_line", "active_paylines",
     "total_bet", "total_base_win", "total_final_win",
@@ -90,7 +90,7 @@ RUNS_FIELDS = [
 ]
 
 SPINS_FIELDS = [
-    "rng_type", "run_id", "seq_index", "seed", "gamble_mode",
+    "rng_type", "run_id", "seq_index", "seed", "gamble_mode", "payout_mode",
     "spin_index",
     "payout_base", "payout_final",
     "hit_base", "hit_final",
@@ -105,6 +105,7 @@ def result_to_run_row(
     seq_index: Optional[int],
     seed: Optional[int],
     gamble_mode: str,
+    payout_mode: str,
     res: Any,
     tracker: RunFeatureTracker
 ) -> Dict[str, Any]:
@@ -116,6 +117,7 @@ def result_to_run_row(
         "seq_index": "" if seq_index is None else seq_index,
         "seed": "" if seed is None else seed,
         "gamble_mode": gamble_mode,
+        "payout_mode": payout_mode,
 
         "start_balance": res.start_balance,
         "end_balance": res.end_balance,
@@ -164,6 +166,7 @@ def run_one_condition(
     seed: Optional[int],
     bits_file: Optional[str],
     gamble_mode: str,
+    payout_mode: str,
     args,
     spins_writer: Optional[csv.DictWriter],
 ) -> Dict[str, Any]:
@@ -181,7 +184,13 @@ def run_one_condition(
     else:
         raise ValueError(f"Unknown rng_type: {rng_type}")
 
-    machine = SlotMachine(config=cfg, modus=rng, bet=args.bet, active_paylines=args.paylines)
+    machine = SlotMachine(
+        config=cfg,
+        modus=rng,
+        bet=args.bet,
+        active_paylines=args.paylines,
+        payout_mode=args.payout_mode,
+    )
 
     tracker = RunFeatureTracker()
 
@@ -243,6 +252,7 @@ def run_one_condition(
         seq_index=seq_index,
         seed=seed,
         gamble_mode=gamble_mode,
+        payout_mode=payout_mode,
         res=res,
         tracker=tracker,
     )
@@ -261,6 +271,7 @@ def main():
     p.add_argument("--max-spins", type=int, default=7000)
     p.add_argument("--bet", type=int, default=1)
     p.add_argument("--paylines", type=int, default=5)
+    p.add_argument("--payout-mode", choices=["safe", "risk"], default="safe")
 
     p.add_argument("--seed-base", type=int, default=12345, help="Pseudo seed per run = seed_base + i")
 
@@ -312,6 +323,7 @@ def main():
                     seed=None,
                     bits_file=args.bits_file,
                     gamble_mode=mode,
+                    payout_mode=args.payout_mode,
                     args=args,
                     spins_writer=spins_writer,
                 )
@@ -328,6 +340,7 @@ def main():
                     seed=seed,
                     bits_file=None,
                     gamble_mode=mode,
+                    payout_mode=args.payout_mode,
                     args=args,
                     spins_writer=spins_writer,
                 )
