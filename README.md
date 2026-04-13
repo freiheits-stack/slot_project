@@ -28,6 +28,14 @@ Now you have the following options:
 - status -> display actual settings
 - quit   -> end game
 
+To check if the Live TrueRNG hardware mode is working properly, you can run "python -m tests.test_random"
+
+To generate offline quantum bit sequences from live TrueRNG hardware
+type "python -m scripts.generate_true_sequences.py"
+It will save the output under data/truerng_sequences.txt
+You can adjust the amount of needed bit sequences and bits per sequence with the following parameters:
+N_SEQUENCES, SPINS_TARGET, DRAWS_PER_SPIN, SAFETY
+
 For reproducible experiment runs (CSV output for statistical analysis):
 type "python -m tests.experiment_runner"
 It will run a fixed number of runs and spins from data/truerng_sequences.txt and Pseudo Random Souce and for gamble mode always and never for comparison
@@ -38,10 +46,3 @@ experiment_runs.csv: rng_type,run_id,seq_index,seed,gamble_mode,payout_mode,star
 experiment_spins.csv: rng_type,run_id,seq_index,seed,gamble_mode,payout_mode,spin_index,payout_base,payout_final,hit_base,hit_final,net_final,gamble_taken,gamble_win
 The results of the analysis (done in Matlab) is saved under data/experiment_results.txt
 
-To check if the Live TrueRNG hardware mode is working properly, you can run "python -m tests.test_random"
-
-To generate offline quantum bit sequences from live TrueRNG hardware
-type "python -m scripts.generate_true_sequences.py"
-It will save the output under data/truerng_sequences.txt
-You can adjust the amount of needed bit sequences and bits per sequence with the following parameters:
-N_SEQUENCES, SPINS_TARGET, DRAWS_PER_SPIN, SAFETY
