@@ -14,11 +14,11 @@ For generating the random numbers it supports:
 
 For Interactive live play (CLI mode):
 type "python -m scripts.play_cli"
-First choose you RNG source, for 1 (pseudo) you can set a seed to reproduce your game.
-Set your start balance. 
+First choose your RNG source, for 1 (pseudo) you can set a seed to reproduce your game, for 2 (offline quantum) you can choose a txt-file with bitsequences (for default "data/truerng_sequences.txt" press enter) and type in the index of the bitsequence you want to use.
+Set your start balance (for default 1000 press enter). 
 Now you have the following options:
 - spin   -> do 1 spin (default settings: bet 1, paylines 5, gamble_mode never, payout mode safe)
-- auto N -> do N spins with actual settings
+- auto N -> do N spins with actual settings (for example type auto 5 to start 5 automatical spins with actual settings)
 - set    -> change settings
             -> bet 1/3/5 (costs per spin)
             -> paylines 1/3/5 (1: middle line, 3: 3 horizontal lines, 5: additionally diagonal lines)
